@@ -38,35 +38,61 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     const passwordField = document.querySelector('input[type="password"], input[name="password"], input[id*="password"]');
 
                     if (emailField && passwordField) {
-                        // Fill in credentials
-                        emailField.value = data.economist_email;
-                        passwordField.value = data.economist_password;
-
-                        // Trigger input events to activate any listeners
-                        emailField.dispatchEvent(new Event('input', { bubbles: true }));
-                        passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-
-                        // Find the submit button
-                        const submitButton = document.querySelector('button[type="submit"], button.slds-button_brand');
-
-                        if (submitButton) {
-                            // Create and dispatch a click event
-                            const clickEvent = new MouseEvent('click', {
-                                bubbles: true,
-                                cancelable: true,
-                                view: window
+                        // Function to type text with random delays
+                        const typeWithDelay = (field, text) => {
+                            return new Promise((resolve) => {
+                                let i = 0;
+                                const typeChar = () => {
+                                    if (i < text.length) {
+                                        field.value += text[i];
+                                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                                        i++;
+                                        // Random delay between 50ms and 150ms
+                                        setTimeout(typeChar, Math.random() * 100 + 50);
+                                    } else {
+                                        resolve();
+                                    }
+                                };
+                                typeChar();
                             });
+                        };
 
-                            // Dispatch the event
-                            submitButton.dispatchEvent(clickEvent);
+                        // Clear fields first
+                        emailField.value = '';
+                        passwordField.value = '';
 
-                            // Also try the native click method
-                            submitButton.click();
+                        // Type email with delay
+                        typeWithDelay(emailField, data.economist_email).then(() => {
+                            // Random delay between 500ms and 1500ms before typing password
+                            setTimeout(() => {
+                                typeWithDelay(passwordField, data.economist_password).then(() => {
+                                    // Random delay between 800ms and 2000ms before clicking submit
+                                    setTimeout(() => {
+                                        // Find the submit button
+                                        const submitButton = document.querySelector('button[type="submit"], button.slds-button_brand');
 
-                            sendResponse({ status: 'success', message: 'Login button clicked' });
-                        } else {
-                            sendResponse({ status: 'error', message: 'Submit button not found' });
-                        }
+                                        if (submitButton) {
+                                            // Create and dispatch a click event
+                                            const clickEvent = new MouseEvent('click', {
+                                                bubbles: true,
+                                                cancelable: true,
+                                                view: window
+                                            });
+
+                                            // // Dispatch the event
+                                            // submitButton.dispatchEvent(clickEvent);
+
+                                            // // Also try the native click method
+                                            // submitButton.click();
+
+                                            sendResponse({ status: 'success', message: 'Login button clicked' });
+                                        } else {
+                                            sendResponse({ status: 'error', message: 'Submit button not found' });
+                                        }
+                                    }, Math.random() * 1200 + 800);
+                                });
+                            }, Math.random() * 1000 + 500);
+                        });
                     } else {
                         sendResponse({ status: 'error', message: 'Login form fields not found' });
                     }
