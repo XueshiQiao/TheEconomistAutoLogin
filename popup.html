@@ -43,6 +43,17 @@
             padding: 5px;
             text-align: center;
         }
+
+        .checkbox-group {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
     </style>
 </head>
 
@@ -55,6 +66,10 @@
     <div class="form-group">
         <label for="password">Password:</label>
         <input type="password" id="password" placeholder="Enter your password">
+    </div>
+    <div class="checkbox-group">
+        <input type="checkbox" id="autologin" checked>
+        <label for="autologin">Enable auto-login</label>
     </div>
     <button id="saveButton">Save Credentials</button>
     <button id="loginButton">Log In Now</button>

@@ -10,6 +10,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             // Check if we're on the login page, if not, go there
             if (!window.location.href.includes('economist.com/s/login')) {
+                console.log('Not on login page, navigating to login page');
                 // Find and click login button
                 const loginButtons = Array.from(document.querySelectorAll('a'))
                     .filter(a => a.textContent.toLowerCase().includes('log in') ||
@@ -17,20 +18,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         a.textContent.toLowerCase().includes('sign in'));
 
                 if (loginButtons.length > 0) {
-                    // Wait for navigation and try again after a delay
-                    setTimeout(() => {
-                        chrome.runtime.sendMessage({ action: "performLogin" });
-                    }, 3000);
-
+                    console.log('Clicking login button');
                     loginButtons[0].click();
-                } else {
-                    // Use Chrome's extension API to navigate
-                    chrome.runtime.sendMessage({
-                        action: "navigateToLogin",
-                        url: 'https://www.economist.com/s/login'
-                    });
+                    console.log('Login button clicked');
                 }
             } else {
+                console.log('On login page, filling out form');
                 // We're on the login page, fill out the form
                 setTimeout(() => {
                     // Find email and password fields
@@ -79,11 +72,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                                                 view: window
                                             });
 
-                                            // // Dispatch the event
-                                            // submitButton.dispatchEvent(clickEvent);
+                                            // Dispatch the event
+                                            submitButton.dispatchEvent(clickEvent);
 
-                                            // // Also try the native click method
-                                            // submitButton.click();
+                                            // Also try the native click method
+                                            submitButton.click();
 
                                             sendResponse({ status: 'success', message: 'Login button clicked' });
                                         } else {
