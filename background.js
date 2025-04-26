@@ -10,10 +10,3 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         });
     }
 });
-
-// Handle navigation to login page
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "navigateToLogin") {
-        chrome.tabs.update(sender.tab.id, { url: message.url });
-    }
-});
