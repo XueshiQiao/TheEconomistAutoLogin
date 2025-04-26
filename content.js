@@ -1,6 +1,14 @@
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action === "performLogin") {
+        // Check if already logged in by looking for the account button
+        const accountButton = document.querySelector('button[data-test-id="masthead-my-account-btn"]');
+        if (accountButton) {
+            console.log('Already logged in, found account button');
+            sendResponse({ status: 'success', message: 'Already logged in' });
+            return;
+        }
+
         // Get stored credentials
         chrome.storage.sync.get(['economist_email', 'economist_password'], function (data) {
             if (!data.economist_email || !data.economist_password) {
