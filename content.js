@@ -1,105 +1,210 @@
-// Listen for messages from popup or background script
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-    if (message.action === "performLogin") {
-        // Check if already logged in by looking for the account button
-        const accountButton = document.querySelector('button[data-test-id="masthead-my-account-btn"]');
-        if (accountButton) {
-            console.log('Already logged in, found account button');
-            sendResponse({ status: 'success', message: 'Already logged in' });
+function isOnLoginPage() {
+    return window.location.href.includes('economist.com/s/login');
+}
+async function getLoginStatus() {
+    if (isOnLoginPage()) {
+        console.log('On login page, not logged in');
+        return Promise.resolve(false);
+    }
+
+    return new Promise((resolve, reject) => {
+        console.log('Checking login status via refreshing auth');
+        fetch('https://www.economist.com/api/auth/refresh', {
+            method: 'GET'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                /**
+                 * json like this:
+                 * {
+                    "ownerAccountId": "xxxxxx",
+                    "subscriptionType": "B2C",
+                    "contactId": "xxxxx",
+                    "email": "xxxxx",
+                    "firstName": "Bibi",
+                    "lastName": "Give",
+                    "phone": null,
+                    "isEmailVerified": "false",
+                    "isB2bClientAdmin": "false",
+                    "isSubscriber": true,
+                    "isLapsed": false,
+                    "lapsedMonths": 0,
+                    "customerSegment": "xxxxx",
+                    "loggedIn": true,
+                    "registeredAt": "2025-01-15T03:02:59.000+0000",
+                    "isEspressoSubscriber": false,
+                    "isPodcastSubscriber": false,
+                    "entitlements": [
+                        {
+                            "productCode": "TE.DIGITAL",
+                            "entitlementCode": [
+                                {
+                                    "code": "TE.APP",
+                                    "expires": "2028-01-15T23:59:59.000Z"
+                                },
+                                {
+                                    "code": "TE.WEB",
+                                    "expires": "2028-01-15T23:59:59.000Z"
+                                },
+                                {
+                                    "code": "TE.NEWSLETTER",
+                                    "expires": "2028-01-15T23:59:59.000Z"
+                                },
+                                {
+                                    "code": "TE.PODCAST",
+                                    "expires": "2028-01-15T23:59:59.000Z"
+                                }
+                            ]
+                        }
+                    ],
+                    "logoUrl": null,
+                    "largeLogoUrl": null,
+                    "showWelcomeModalLogo": "false",
+                    "showOrganisationLogo": "false"
+                }
+                 */
+                return response.json();
+            })
+            .then(data => {
+                console.log('Auth refresh response:', data);
+                resolve(data && data.loggedIn);
+            })
+            .catch(error => {
+                console.log('Error refreshing auth:', error);
+                resolve(false);
+            });
+    });
+}
+
+async function getStoredCredentials() {
+    return new Promise((resolve, reject) => {
+        chrome.storage.sync.get(['economist_email', 'economist_password'], function (data) {
+            if (!data.economist_email || !data.economist_password) {
+                reject(new Error('Credentials not found'));
+            } else {
+                resolve(data);
+            }
+        });
+    });
+}
+
+
+async function redirectToLoginPageIfNeeded(isLoggedIn) {
+    if (isLoggedIn) {
+        console.log('Already logged in, no need to redirect');
+        return Promise.reject("Already logged in");
+    }
+
+    return new Promise((resolve, reject) => {
+        // Check if we're already on the login page
+        if (isOnLoginPage()) {
+            console.log('Already on login page');
+            resolve();
             return;
         }
 
-        // Get stored credentials
-        chrome.storage.sync.get(['economist_email', 'economist_password'], function (data) {
-            if (!data.economist_email || !data.economist_password) {
-                sendResponse({ status: 'error', message: 'Credentials not found' });
-                return;
-            }
+        // Find and click login button
+        const loginButtons = Array.from(document.querySelectorAll('a'))
+            .filter(a => a.textContent.toLowerCase().includes('log in') ||
+                a.textContent.toLowerCase().includes('login') ||
+                a.textContent.toLowerCase().includes('sign in'));
 
-            // Check if we're on the login page, if not, go there
-            if (!window.location.href.includes('economist.com/s/login')) {
-                console.log('Not on login page, navigating to login page');
-                // Find and click login button
-                const loginButtons = Array.from(document.querySelectorAll('a'))
-                    .filter(a => a.textContent.toLowerCase().includes('log in') ||
-                        a.textContent.toLowerCase().includes('login') ||
-                        a.textContent.toLowerCase().includes('sign in'));
+        if (loginButtons.length > 0) {
+            console.log('Clicking login button');
+            loginButtons[0].click();
+            console.log('Login button clicked');
+        }
+        resolve();
+    });
+}
 
-                if (loginButtons.length > 0) {
-                    console.log('Clicking login button');
-                    loginButtons[0].click();
-                    console.log('Login button clicked');
-                }
-            } else {
-                console.log('On login page, filling out form');
-                // We're on the login page, fill out the form
-                setTimeout(() => {
-                    // Find email and password fields
-                    const emailField = document.querySelector('input[type="email"], input[name="email"], input[name="username"], input[id*="email"], input[placeholder*="email"]');
-                    const passwordField = document.querySelector('input[type="password"], input[name="password"], input[id*="password"]');
+async function fillLoginForm(data) {
+    return new Promise((resolve, reject) => {
 
-                    if (emailField && passwordField) {
-                        // Function to type text with random delays
-                        const typeWithDelay = (field, text) => {
-                            return new Promise((resolve) => {
-                                let i = 0;
-                                const typeChar = () => {
-                                    if (i < text.length) {
-                                        field.value += text[i];
-                                        field.dispatchEvent(new Event('input', { bubbles: true }));
-                                        i++;
-                                        // Random delay between 50ms and 150ms
-                                        setTimeout(typeChar, Math.random() * 100 + 50);
-                                    } else {
-                                        resolve();
-                                    }
-                                };
-                                typeChar();
-                            });
+        setTimeout(() => {
+            // Find email and password fields
+            const emailField = document.querySelector('input[type="email"], input[name="email"], input[name="username"], input[id*="email"], input[placeholder*="email"]');
+            const passwordField = document.querySelector('input[type="password"], input[name="password"], input[id*="password"]');
+
+            if (emailField && passwordField) {
+                // Function to type text with random delays
+                const typeWithDelay = (field, text) => {
+                    return new Promise((resolve) => {
+                        let i = 0;
+                        const typeChar = () => {
+                            if (i < text.length) {
+                                field.value += text[i];
+                                field.dispatchEvent(new Event('input', { bubbles: true }));
+                                i++;
+                                // Random delay between 50ms and 150ms
+                                setTimeout(typeChar, Math.random() * 100 + 50);
+                            } else {
+                                resolve();
+                            }
                         };
+                        typeChar();
+                    });
+                };
 
-                        // Clear fields first
-                        emailField.value = '';
-                        passwordField.value = '';
+                // Clear fields first
+                emailField.value = '';
+                passwordField.value = '';
 
-                        // Type email with delay
-                        typeWithDelay(emailField, data.economist_email).then(() => {
-                            // Random delay between 500ms and 1500ms before typing password
+                // Type email with delay
+                typeWithDelay(emailField, data.economist_email).then(() => {
+                    // Random delay between 500ms and 1500ms before typing password
+                    setTimeout(() => {
+                        typeWithDelay(passwordField, data.economist_password).then(() => {
+                            // Random delay between 800ms and 2000ms before clicking submit
                             setTimeout(() => {
-                                typeWithDelay(passwordField, data.economist_password).then(() => {
-                                    // Random delay between 800ms and 2000ms before clicking submit
-                                    setTimeout(() => {
-                                        // Find the submit button
-                                        const submitButton = document.querySelector('button[type="submit"], button.slds-button_brand');
+                                // Find the submit button
+                                const submitButton = document.querySelector('button[type="submit"], button.slds-button_brand');
 
-                                        if (submitButton) {
-                                            // Create and dispatch a click event
-                                            const clickEvent = new MouseEvent('click', {
-                                                bubbles: true,
-                                                cancelable: true,
-                                                view: window
-                                            });
+                                if (submitButton) {
+                                    // Create and dispatch a click event
+                                    const clickEvent = new MouseEvent('click', {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        view: window
+                                    });
 
-                                            // Dispatch the event
-                                            submitButton.dispatchEvent(clickEvent);
+                                    // Dispatch the event
+                                    submitButton.dispatchEvent(clickEvent);
 
-                                            // Also try the native click method
-                                            submitButton.click();
-
-                                            sendResponse({ status: 'success', message: 'Login button clicked' });
-                                        } else {
-                                            sendResponse({ status: 'error', message: 'Submit button not found' });
-                                        }
-                                    }, Math.random() * 1200 + 800);
-                                });
-                            }, Math.random() * 1000 + 500);
+                                    // Also try the native click method
+                                    submitButton.click();
+                                    resolve(true);
+                                } else {
+                                    reject(new Error('Submit button not found'));
+                                }
+                            }, Math.random() * 1500);
                         });
-                    } else {
-                        sendResponse({ status: 'error', message: 'Login form fields not found' });
-                    }
-                }, 1000);
+                    }, Math.random() * 1200);
+                });
+            } else {
+                // sendResponse({ status: 'error', message: 'Login form fields not found' });
+                reject(new Error('Login form fields not found'));
             }
-        });
+        }, 1000);
+    });
+}
+
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action === "performLogin") {
+        getLoginStatus()
+            .then(redirectToLoginPageIfNeeded)
+            .then(getStoredCredentials)
+            .then(data => fillLoginForm(data))
+            .then(() => {
+                console.log('Login form filled and submitted');
+                sendResponse({ status: 'success', message: 'Login form filled and submitted' });
+            })
+            .catch(error => {
+                console.log('Error checking login status:', error);
+                sendResponse({ status: 'error', message: 'Error checking login status' });
+            });
         return true; // Keep channel open for async response
     }
 });
